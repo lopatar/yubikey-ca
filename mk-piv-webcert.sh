@@ -15,7 +15,7 @@ Parameters:
   BITS  (optional)  RSA key size, default 2048
 
 Environment overrides:
-  RSA_BITS, CA_CERT, DAYS, CA_KEY_URI, OUTDIR, PKCS11_MODULE_PATH
+  RSA_BITS, CA_CERT, DAYS, CA_KEY_URI, OUTDIR, PKCS11_MODULE_PATH, PRINT_KEY
 
 Behavior:
   • Generates RSA key + CSR
@@ -45,7 +45,8 @@ CA_CERT="${CA_CERT:-LopatarCA.crt}"
 DAYS="${DAYS:-1825}"
 CA_KEY_URI="${CA_KEY_URI:-pkcs11:object=Private%20key%20for%20Digital%20Signature;type=private}"
 OUTDIR="${OUTDIR:-$CN}"
-
+# --- Optional: print private key to console ---
+PRINT_KEY="${PRINT_KEY:-0}"
 # --- Locate libykcs11.so if not set ---
 if [[ -z "${PKCS11_MODULE_PATH:-}" || ! -e "${PKCS11_MODULE_PATH:-/dev/null}" ]]; then
   for p in /usr/lib/*/libykcs11.so /usr/local/lib/libykcs11.so /lib/*/libykcs11.so; do
@@ -68,7 +69,7 @@ CRT="$OUTDIR/$BASE.crt"
 EXT="$OUTDIR/$BASE.ext"
 CSR_CNF="$OUTDIR/$BASE.csr.cnf"
 FULLCHAIN="$OUTDIR/$BASE.fullchain.pem"
-PFX="$OUTDIR/$BASE.pfx"
+PFX="$OUTDIR/$BASE.p12"
 ZIP="$OUTDIR/$BASE.zip"
 SRL="${CA_CERT%.*}.srl"
 
@@ -109,9 +110,13 @@ subjectAltName = @alt
 $SAN_DNS$SAN_IP
 EOF
 
+# --- Generate a random 32-char password ---
+KEY_PASS=$(openssl rand -hex 16)
+
 # --- Generate key + CSR ---
-openssl req -new -newkey "rsa:${RSA_BITS}" -nodes \
-  -keyout "$KEY" -out "$CSR" -config "$CSR_CNF"
+openssl req -new -newkey "rsa:${RSA_BITS}" \
+    -keyout "$KEY" -out "$CSR" -config "$CSR_CNF" \
+    -passout "pass:$KEY_PASS"
 
 # --- Sign with YubiKey (pkcs11 engine) ---
 openssl x509 -req \
@@ -131,20 +136,19 @@ PFX_PASS="$(openssl rand -hex 8)"
 openssl pkcs12 -export \
   -inkey "$KEY" -in "$CRT" -certfile "$CA_CERT" \
   -name "$CN" -out "$PFX" \
-  -passout "pass:$PFX_PASS"
-
-echo ""
-cat "$KEY"
-echo ""
-
-echo ""
-echo "> Certificate generated successfully"
-echo "> CN: $CN"
-echo "> RSA bits: $RSA_BITS"
-echo "> PFX password (printed once): $PFX_PASS"
-echo ""
+  -passin "pass:$KEY_PASS" -passout "pass:$PFX_PASS" \
+  -keypbe AES-256-CBC -certpbe AES-256-CBC
 
 unset PFX_PASS
+
+if [[ "$PRINT_KEY" == 1 || "$PRINT_KEY" == "true" ]]; then
+  echo ""
+  # print directly to the terminal descriptor (bypasses shell redirection)
+  openssl rsa -in "$KEY" -passin "pass:$KEY_PASS" > /dev/tty
+  echo ""
+fi
+
+unset KEY_PASS
 
 # --- Cleanup sensitive files ---
 secure_rm "$KEY"

@@ -71,7 +71,7 @@ CRT="$OUTDIR/$BASE.crt"
 EXT="$OUTDIR/$BASE.ext"
 CSR_CNF="$OUTDIR/$BASE.csr.cnf"
 FULLCHAIN="$OUTDIR/$BASE.fullchain.pem"
-PFX="$OUTDIR/$BASE.pfx"
+PFX="$OUTDIR/$BASE.p12"
 ZIP="$OUTDIR/$BASE.zip"
 SRL="${CA_CERT%.*}.srl"
 
@@ -126,9 +126,13 @@ subjectAltName = @alt
 $(printf '%s' "$SAN_EMAIL$SAN_DNS_FALLBACK")
 EOF
 
+# --- Generate a random 32-char password ---
+KEY_PASS=$(openssl rand -hex 16)
+
 # --- Generate key + CSR ---
-openssl req -new -newkey "rsa:${RSA_BITS}" -nodes \
-  -keyout "$KEY" -out "$CSR" -config "$CSR_CNF"
+openssl req -new -newkey "rsa:${RSA_BITS}" \
+    -keyout "$KEY" -out "$CSR" -config "$CSR_CNF" \
+    -aes256 -passout "pass:$KEY_PASS"
 
 # Ensure a serial file exists at our chosen path
 if [[ ! -f "$SRL" ]]; then
@@ -153,7 +157,11 @@ PFX_PASS="$(openssl rand -hex 8)"
 openssl pkcs12 -export \
   -inkey "$KEY" -in "$CRT" -certfile "$CA_CERT" \
   -name "$CN" -out "$PFX" \
-  -passout "pass:$PFX_PASS"
+  -passin "pass:$KEY_PASS" -passout "pass:$PFX_PASS" \
+  -keypbe AES-256-CBC -certpbe AES-256-CBC
+
+unset KEY_PASS
+unset PFX_PASS
 
 echo ""
 echo "> Client certificate generated successfully"
@@ -161,10 +169,8 @@ echo "> CN: $CN"
 [[ -n "$EMAIL" ]] && echo "> Email (SAN/DN): $EMAIL"
 echo "> RSA bits: $RSA_BITS"
 echo "> EKU: clientAuth"
-echo "> PFX password (printed once): $PFX_PASS"
+echo "> P12 password (printed once): $PFX_PASS"
 echo ""
-
-unset PFX_PASS
 
 # --- Cleanup sensitive files ---
 secure_rm "$KEY"
