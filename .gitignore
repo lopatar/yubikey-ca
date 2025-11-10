@@ -1,0 +1,7 @@
+# output folders
+*/
+*.key
+*.pfx
+*.zip
+*.csr
+*.srl
