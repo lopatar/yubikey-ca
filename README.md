@@ -1,6 +1,6 @@
-# README — YubiKey CA
+# YubiKey CA
 
-These two scripts simplify creating and signing certificates using a **YubiKey PIV** (slot 9c) as a signing device. One script is for **web server certificates**; the other is for **client TLS certificates**.
+These two scripts simplify creating and signing certificates using a **YubiKey PIV** (slot 9c) as a signing device. One script is for **web server certificates**; the other is for **client TLS certificates**. Currently, supports RSA only.
 
 ---
 
@@ -30,7 +30,8 @@ These two scripts simplify creating and signing certificates using a **YubiKey P
     * `CN.fullchain.pem` — CRT + CA chain
     * `CN.p12` — PKCS#12 bundle
     * `CN.zip` — zipped folder
-  * Generates a **32-character password** for key protection and PFX export.
+  * Uses a **32-character password** for private key protection.
+  * Exports PFX/P12 bundle protected using a **16-character password** (Windows has issues importing bundles with longer passwords)
   * Optionally prints the decrypted private key if `PRINT_KEY=1`.
   * Cleans up private key and temporary files.
 
@@ -55,8 +56,8 @@ These two scripts simplify creating and signing certificates using a **YubiKey P
   * Generates an RSA key + CSR locally.
   * Signs CSR with YubiKey PIV CA key.
   * Generates output files in `<CN>/` (same as web script).
-  * Uses a 32-character password for private key and PFX export.
-  * Optionally prints the decrypted private key if needed.
+  * Uses a **32-character password** for private key protection.
+  * Exports PFX/P12 bundle protected using a **16-character password** (Windows has issues importing bundles with longer passwords)
   * Cleans up temporary and sensitive files.
 
 ---
@@ -79,18 +80,16 @@ These two scripts simplify creating and signing certificates using a **YubiKey P
   * `zip`
   * Optional: `shred` for secure deletion of private key.
 
-* **Security Notes**:
+---
 
-  * Private key is generated encrypted with a random password.
-  * Password is used for PFX export and then unset.
+## Security notes
+  
+  * Private key is generated encrypted with a random password (then securely deleted from disk).
+  * Random password is used for protecting the PFX/P12 export (using AES256-CBC as cipher).
   * Temporary and sensitive files are removed automatically.
-  * Decrypted private key is only printed if explicitly requested.
-
-* **SAN and EKU**:
-
-  * Web script: DNS CN + optional IP SAN, EKU = `serverAuth`.
-  * Client script: CN + optional email SAN, EKU = `clientAuth`.
-
+  * Sensitive information (private key, PFX/P12 bundle password) gets printed to `/dev/tty` (to fight output redirection and log snooping).
+  * Decrypted private key is only printed if explicitly requested (web script only).
+  * CA key **never leaves** the YubiKey, signing operations are handled by the secure element.
 ---
 
 ## Example Usage
@@ -127,11 +126,4 @@ export PKCS11_MODULE_PATH=/usr/lib/x86_64-linux-gnu/libykcs11.so
 
 ## Notes
 
-* The scripts **require a YubiKey PIV with the CA key** in slot 9c.
-* The scripts **automatically manage serial files** for certificates.
-* Generated passwords are **random and not stored**; if you need the private key later, you must print it during generation.
-* The CA private key **never leaves the YubiKey**; all signing is done via PKCS#11.
-
----
-
-This README covers both scripts’ usage, configuration, outputs, and security considerations.
+* The scripts **require a YubiKey PIV with the CA key** in slot 9c (Digital Signature).

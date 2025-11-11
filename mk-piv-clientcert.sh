@@ -18,13 +18,12 @@ Environment overrides:
   RSA_BITS, CA_CERT, DAYS, CA_KEY_URI, OUTDIR, PKCS11_MODULE_PATH
 
 Behavior:
-  • Generates RSA key + CSR
+  • Generates encrypted RSA key + CSR
   • Signs CSR using YubiKey PIV slot 9c (via PKCS#11)
   • Extended Key Usage: clientAuth
   • Outputs certs to <CN>/:
         CN.crt, CN.fullchain.pem, CN.pfx, CN.zip
-  • Prints the certificate private key (not saved)
-  • Prints a random 16-hex PFX password (not saved)
+  • Prints a random 16-char P12 bundle password (not saved)
   • Deletes private key and temp files
   • Displays certificate info at the end
 
@@ -34,20 +33,20 @@ Examples:
 EOF
 }
 
-# --- Args / defaults ---
+# Args / defaults
 CN="${1:-}"
 [[ -z "${CN}" || "${CN}" == "-h" || "${CN}" == "--help" ]] && { print_usage; exit 2; }
 EMAIL="${2:-}"
 RSA_BITS="${RSA_BITS:-${3:-2048}}"
 [[ $RSA_BITS =~ ^[0-9]+$ ]] || { echo "Invalid RSA key size"; exit 2; }
 
-# --- Config (override via env) ---
+# Config (override via env)
 CA_CERT="${CA_CERT:-LopatarCA.crt}"
 DAYS="${DAYS:-1825}"
 CA_KEY_URI="${CA_KEY_URI:-pkcs11:object=Private%20key%20for%20Digital%20Signature;type=private}"
 OUTDIR="${OUTDIR:-$CN}"
 
-# --- Locate libykcs11.so if not set or invalid ---
+# Locate libykcs11.so if not set
 if [[ -z "${PKCS11_MODULE_PATH:-}" || ! -e "${PKCS11_MODULE_PATH}" ]]; then
   for p in /usr/lib/*/libykcs11.so /usr/local/lib/libykcs11.so /lib/*/libykcs11.so; do
     [[ -e "$p" ]] && PKCS11_MODULE_PATH="$p" && export PKCS11_MODULE_PATH && break
@@ -57,12 +56,12 @@ if [[ -z "${PKCS11_MODULE_PATH:-}" || ! -e "${PKCS11_MODULE_PATH}" ]]; then
   echo "libykcs11.so not found. Set PKCS11_MODULE_PATH to the path of libykcs11.so"; exit 3
 fi
 
-# --- Sanity ---
+# Check for prerequisites
 command -v openssl >/dev/null || { echo "openssl not found"; exit 3; }
 command -v zip >/dev/null     || { echo "zip not found"; exit 3; }
 [[ -f "$CA_CERT" ]] || { echo "CA cert '$CA_CERT' not found"; exit 4; }
 
-# --- Paths ---
+# Paths
 mkdir -p "$OUTDIR"
 BASE="$CN"
 KEY="$OUTDIR/$BASE.key"
@@ -75,9 +74,16 @@ PFX="$OUTDIR/$BASE.p12"
 ZIP="$OUTDIR/$BASE.zip"
 SRL="${CA_CERT%.*}.srl"
 
-secure_rm() { command -v shred >/dev/null && shred -u -- "$@" || rm -f -- "$@"; }
+# use shred to dispose of the private key, fallback to rm
+secure_rm() {
+    if command -v shred >/dev/null; then
+        shred -u -- "$@"
+    else
+        rm -f -- "$@"
+    fi
+}
 
-# --- SANs / DN helpers ---
+# SAN/email
 DN_EMAIL=""
 SAN_EMAIL=""
 if [[ -n "$EMAIL" ]]; then
@@ -91,7 +97,7 @@ if [[ -z "$SAN_EMAIL" ]]; then
   SAN_DNS_FALLBACK=$'\n'"DNS.1 = $CN"
 fi
 
-# --- Signing extensions (AKID here) ---
+# Signing extensions, key usage
 cat > "$EXT" <<EOF
 [v3_cert]
 basicConstraints = critical, CA:FALSE
@@ -106,7 +112,7 @@ subjectAltName = @alt
 $(printf '%s' "$SAN_EMAIL$SAN_DNS_FALLBACK")
 EOF
 
-# --- CSR config ---
+# CSR config
 cat > "$CSR_CNF" <<EOF
 [req]
 prompt = no
@@ -126,7 +132,7 @@ subjectAltName = @alt
 $(printf '%s' "$SAN_EMAIL$SAN_DNS_FALLBACK")
 EOF
 
-# --- Generate a random 32-char password ---
+# Generate random 32-char password, used for encrypting the private key on disk
 KEY_PASS=$(openssl rand -hex 16)
 
 # --- Generate key + CSR ---
@@ -139,7 +145,7 @@ if [[ ! -f "$SRL" ]]; then
   echo '01' > "$SRL"
 fi
 
-# --- Sign with YubiKey (pkcs11 engine) ---
+# Sign with YubiKey (pkcs11 engine)
 openssl x509 -req \
   -in "$CSR" \
   -CA "$CA_CERT" \
@@ -149,10 +155,10 @@ openssl x509 -req \
   -extfile "$EXT" -extensions v3_cert \
   -out "$CRT"
 
-# --- Full chain ---
+# Create fullchain file
 cat "$CRT" "$CA_CERT" > "$FULLCHAIN"
 
-# --- Export PFX with random 16-char password ---
+# Export PFX/P12 with a random 16-char password (Windows has issues importing with longer passwords)
 PFX_PASS="$(openssl rand -hex 8)"
 openssl pkcs12 -export \
   -inkey "$KEY" -in "$CRT" -certfile "$CA_CERT" \
@@ -161,7 +167,6 @@ openssl pkcs12 -export \
   -keypbe AES-256-CBC -certpbe AES-256-CBC
 
 unset KEY_PASS
-unset PFX_PASS
 
 echo ""
 echo "> Client certificate generated successfully"
@@ -169,8 +174,10 @@ echo "> CN: $CN"
 [[ -n "$EMAIL" ]] && echo "> Email (SAN/DN): $EMAIL"
 echo "> RSA bits: $RSA_BITS"
 echo "> EKU: clientAuth"
-echo "> P12 password (printed once): $PFX_PASS"
+echo "> P12 password (printed once): $PFX_PASS" > /dev/tty # sensitive, use same logic as for private key in web server script
 echo ""
+
+unset PFX_PASS
 
 # --- Cleanup sensitive files ---
 secure_rm "$KEY"

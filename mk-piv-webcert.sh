@@ -18,12 +18,12 @@ Environment overrides:
   RSA_BITS, CA_CERT, DAYS, CA_KEY_URI, OUTDIR, PKCS11_MODULE_PATH, PRINT_KEY
 
 Behavior:
-  • Generates RSA key + CSR
+  • Generates encrypted RSA key + CSR
   • Signs CSR using YubiKey PIV slot 9c (via PKCS#11)
   • Outputs certs to <CN>/:
         CN.crt, CN.fullchain.pem, CN.pfx, CN.zip
-  • Prints the certificate private key (not saved)       
-  • Prints a random 16-hex PFX password (not saved)
+  • Optionally prints the certificate private key (not saved)     
+  • Prints a random 16-char P12 bundle password (not saved)
   • Deletes private key and temp files
   • Displays certificate info at the end
 
@@ -33,21 +33,21 @@ Examples:
 EOF
 }
 
-# --- Args / defaults ---
+# Args / defaults
 CN="${1:-}"
 [[ -z "${CN}" || "${CN}" == "-h" || "${CN}" == "--help" ]] && { print_usage; exit 2; }
 IP="${2:-}"
 RSA_BITS="${RSA_BITS:-${3:-2048}}"
 [[ "$RSA_BITS" =~ ^[0-9]+$ ]] || { echo "Invalid RSA key size"; exit 2; }
 
-# --- Config (override via env) ---
+# Config (override via env)
 CA_CERT="${CA_CERT:-LopatarCA.crt}"
 DAYS="${DAYS:-1825}"
 CA_KEY_URI="${CA_KEY_URI:-pkcs11:object=Private%20key%20for%20Digital%20Signature;type=private}"
 OUTDIR="${OUTDIR:-$CN}"
-# --- Optional: print private key to console ---
+# If 1/true, print private key to console /dev/tty
 PRINT_KEY="${PRINT_KEY:-0}"
-# --- Locate libykcs11.so if not set ---
+# Locate libykcs11.so if not set
 if [[ -z "${PKCS11_MODULE_PATH:-}" || ! -e "${PKCS11_MODULE_PATH:-/dev/null}" ]]; then
   for p in /usr/lib/*/libykcs11.so /usr/local/lib/libykcs11.so /lib/*/libykcs11.so; do
     [[ -e "$p" ]] && PKCS11_MODULE_PATH="$p" && export PKCS11_MODULE_PATH && break
@@ -55,12 +55,12 @@ if [[ -z "${PKCS11_MODULE_PATH:-}" || ! -e "${PKCS11_MODULE_PATH:-/dev/null}" ]]
 fi
 : "${PKCS11_MODULE_PATH:?Set PKCS11_MODULE_PATH to libykcs11.so}"
 
-# --- Sanity ---
+# Check for prerequisites
 command -v openssl >/dev/null || { echo "openssl not found"; exit 3; }
 command -v zip >/dev/null     || { echo "zip not found"; exit 3; }
 [[ -f "$CA_CERT" ]] || { echo "CA cert '$CA_CERT' not found"; exit 4; }
 
-# --- Paths ---
+# Paths
 mkdir -p "$OUTDIR"
 BASE="$CN"
 KEY="$OUTDIR/$BASE.key"
@@ -73,13 +73,20 @@ PFX="$OUTDIR/$BASE.p12"
 ZIP="$OUTDIR/$BASE.zip"
 SRL="${CA_CERT%.*}.srl"
 
-secure_rm() { command -v shred >/dev/null && shred -u -- "$@" || rm -f -- "$@"; }
+# use shred to dispose of the private key, fallback to rm
+secure_rm() {
+    if command -v shred >/dev/null; then
+        shred -u -- "$@"
+    else
+        rm -f -- "$@"
+    fi
+}
 
-# --- SANs ---
+# SAN
 SAN_DNS="DNS.1 = $CN"
 SAN_IP=""; [[ -n "$IP" ]] && SAN_IP=$'\n'"IP.1  = $IP"
 
-# --- Signing extensions (AKID here) ---
+# Signing extensions, key usage
 cat > "$EXT" <<EOF
 [v3_cert]
 basicConstraints = critical, CA:FALSE
@@ -93,7 +100,7 @@ subjectAltName = @alt
 $SAN_DNS$SAN_IP
 EOF
 
-# --- CSR config ---
+# CSR config
 cat > "$CSR_CNF" <<EOF
 [req]
 prompt = no
@@ -110,15 +117,15 @@ subjectAltName = @alt
 $SAN_DNS$SAN_IP
 EOF
 
-# --- Generate a random 32-char password ---
+# Generate random 32-char password, used for encrypting the private key on disk
 KEY_PASS=$(openssl rand -hex 16)
 
-# --- Generate key + CSR ---
+# Generate key + CSR
 openssl req -new -newkey "rsa:${RSA_BITS}" \
     -keyout "$KEY" -out "$CSR" -config "$CSR_CNF" \
     -passout "pass:$KEY_PASS"
 
-# --- Sign with YubiKey (pkcs11 engine) ---
+# Sign with YubiKey (pkcs11 engine)
 openssl x509 -req \
   -in "$CSR" \
   -CA "$CA_CERT" \
@@ -128,19 +135,18 @@ openssl x509 -req \
   -extfile "$EXT" -extensions v3_cert \
   -out "$CRT"
 
-# --- Full chain ---
+# Create fullchain file
 cat "$CRT" "$CA_CERT" > "$FULLCHAIN"
 
-# --- Export PFX with random 16-char password ---
+# Export PFX/P12 with a random 16-char password (Windows has issues importing with longer passwords)
 PFX_PASS="$(openssl rand -hex 8)"
 openssl pkcs12 -export \
   -inkey "$KEY" -in "$CRT" -certfile "$CA_CERT" \
   -name "$CN" -out "$PFX" \
   -passin "pass:$KEY_PASS" -passout "pass:$PFX_PASS" \
-  -keypbe AES-256-CBC -certpbe AES-256-CBC
+  -keypbe AES-256-CBC -certpbe AES-256-CBC # Use AES-256-CBC for the private key & certificate bags
 
-unset PFX_PASS
-
+# Optionally print private key
 if [[ "$PRINT_KEY" == 1 || "$PRINT_KEY" == "true" ]]; then
   echo ""
   # print directly to the terminal descriptor (bypasses shell redirection)
@@ -150,11 +156,22 @@ fi
 
 unset KEY_PASS
 
-# --- Cleanup sensitive files ---
+echo ""
+echo "> WWW server cert generated successfully"
+echo "> CN: $CN"
+[[ -n "$IP" ]] && echo "> IP (SAN): $IP"
+echo "> RSA bits: $RSA_BITS"
+echo "> EKU: serverAuth"
+echo "> P12 password (printed once): $PFX_PASS" > /dev/tty # sensitive, use same logic as for private key
+echo ""
+
+unset PFX_PASS
+
+# Cleanup sensitive files
 secure_rm "$KEY"
 rm -f "$CSR" "$EXT" "$CSR_CNF"
 
-# --- Zip folder contents ---
+# Zip folder contents
 ( cd "$OUTDIR" && rm -f "$BASE.zip" && zip -r "$BASE.zip" . -x "$BASE.zip" >/dev/null )
 
 echo ""
