@@ -133,12 +133,13 @@ $(printf '%s' "$SAN_EMAIL$SAN_DNS_FALLBACK")
 EOF
 
 # Generate random 32-char password, used for encrypting the private key on disk
+export KEY_PASS
 KEY_PASS=$(openssl rand -hex 16)
 
 # --- Generate key + CSR ---
 openssl req -new -newkey "rsa:${RSA_BITS}" \
     -keyout "$KEY" -out "$CSR" -config "$CSR_CNF" \
-    -aes256 -passout "pass:$KEY_PASS"
+    -aes256 -passout "env:$KEY_PASS"
 
 # Ensure a serial file exists at our chosen path
 if [[ ! -f "$SRL" ]]; then
@@ -159,11 +160,12 @@ openssl x509 -req \
 cat "$CRT" "$CA_CERT" > "$FULLCHAIN"
 
 # Export PFX/P12 with a random 16-char password (Windows has issues importing with longer passwords)
+export PFX_PASS
 PFX_PASS="$(openssl rand -hex 8)"
 openssl pkcs12 -export \
   -inkey "$KEY" -in "$CRT" -certfile "$CA_CERT" \
   -name "$CN" -out "$PFX" \
-  -passin "pass:$KEY_PASS" -passout "pass:$PFX_PASS" \
+  -passin "env:$KEY_PASS" -passout "env:$PFX_PASS" \
   -keypbe AES-256-CBC -certpbe AES-256-CBC
 
 unset KEY_PASS
@@ -179,11 +181,11 @@ echo ""
 
 unset PFX_PASS
 
-# --- Cleanup sensitive files ---
+# Cleanup sensitive files
 secure_rm "$KEY"
 rm -f "$CSR" "$EXT" "$CSR_CNF"
 
-# --- Zip folder contents ---
+# Zip folder contents 
 ( cd "$OUTDIR" && rm -f "$BASE.zip" && zip -r "$BASE.zip" . -x "$BASE.zip" >/dev/null )
 
 echo ""

@@ -118,12 +118,13 @@ $SAN_DNS$SAN_IP
 EOF
 
 # Generate random 32-char password, used for encrypting the private key on disk
+export KEY_PASS
 KEY_PASS=$(openssl rand -hex 16)
 
 # Generate key + CSR
 openssl req -new -newkey "rsa:${RSA_BITS}" \
     -keyout "$KEY" -out "$CSR" -config "$CSR_CNF" \
-    -passout "pass:$KEY_PASS"
+    -passout "env:$KEY_PASS"
 
 # Sign with YubiKey (pkcs11 engine)
 openssl x509 -req \
@@ -139,18 +140,19 @@ openssl x509 -req \
 cat "$CRT" "$CA_CERT" > "$FULLCHAIN"
 
 # Export PFX/P12 with a random 16-char password (Windows has issues importing with longer passwords)
+export PFX_PASS
 PFX_PASS="$(openssl rand -hex 8)"
 openssl pkcs12 -export \
   -inkey "$KEY" -in "$CRT" -certfile "$CA_CERT" \
   -name "$CN" -out "$PFX" \
-  -passin "pass:$KEY_PASS" -passout "pass:$PFX_PASS" \
+  -passin "env:$KEY_PASS" -passout "env:$PFX_PASS" \
   -keypbe AES-256-CBC -certpbe AES-256-CBC # Use AES-256-CBC for the private key & certificate bags
 
 # Optionally print private key
 if [[ "$PRINT_KEY" == 1 || "$PRINT_KEY" == "true" ]]; then
   echo ""
   # print directly to the terminal descriptor (bypasses shell redirection)
-  openssl rsa -in "$KEY" -passin "pass:$KEY_PASS" > /dev/tty
+  openssl rsa -in "$KEY" -passin "env:$KEY_PASS" > /dev/tty
   echo ""
 fi
 
