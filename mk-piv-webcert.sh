@@ -178,4 +178,5 @@ rm -f "$CSR" "$EXT" "$CSR_CNF"
 
 echo ""
 echo "Files saved in: $OUTDIR/"
+chmod 600 "$CRT" "$FULLCHAIN" "$PFX" "$ZIP"
 printf '  %s\n  %s\n  %s\n  %s\n' "$CRT" "$FULLCHAIN" "$PFX" "$ZIP"
