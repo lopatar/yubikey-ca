@@ -1,6 +1,6 @@
 # YubiKey CA
 
-These two scripts simplify creating and signing certificates using a **YubiKey PIV** (slot 9c) as a signing device. One script is for **web server certificates**; the other is for **client TLS certificates**. Currently, supports RSA only.
+These two scripts simplify creating and signing certificates using a **YubiKey PIV** (slot 9c) as a signing device. One script is for **web server certificates**; the other is for **client TLS certificates**. Currently supports P-256 and P-384.
 
 ---
 
@@ -12,17 +12,17 @@ These two scripts simplify creating and signing certificates using a **YubiKey P
 * **Usage**:
 
 ```bash
-./mk-piv-webcert.sh <CN> [IP] [BITS]
+./mk-piv-webcert.sh <CN> [IP] [CURVE]
 ```
 
 * **Parameters**:
 
   * `CN` (required) — Common Name and output folder name.
   * `IP` (optional) — IP address for Subject Alternative Name (SAN).
-  * `BITS` (optional) — RSA key size (default 2048).
+  * `CURVE` (optional) — ECC curve name, defaults to secpr384r1
 * **Behavior**:
 
-  * Generates an RSA key + CSR locally.
+  * Generates an ECC key + CSR locally.
   * Signs CSR with YubiKey PIV CA key (slot 9c via PKCS#11).
   * Generates output files in `<CN>/`:
 
@@ -43,14 +43,14 @@ These two scripts simplify creating and signing certificates using a **YubiKey P
 * **Usage**:
 
 ```bash
-./mk-piv-client-cert.sh <CN> [EMAIL] [BITS]
+./mk-piv-client-cert.sh <CN> [EMAIL] [CURVE]
 ```
 
 * **Parameters**:
 
   * `CN` (required) — Common Name and output folder name.
   * `EMAIL` (optional) — Email for SAN (`rfc822Name`) and DN (`emailAddress`).
-  * `BITS` (optional) — RSA key size (default 2048).
+  * `CURVE` (optional) — ECC curve name, defaults to secpr384r1
 * **Behavior**:
 
   * Generates an RSA key + CSR locally.
