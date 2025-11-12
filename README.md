@@ -53,7 +53,7 @@ These two scripts simplify creating and signing certificates using a **YubiKey P
   * `CURVE` (optional) — ECC curve name, defaults to secpr384r1
 * **Behavior**:
 
-  * Generates an RSA key + CSR locally.
+  * Generates an ECC key + CSR locally.
   * Signs CSR with YubiKey PIV CA key.
   * Generates output files in `<CN>/` (same as web script).
   * Uses a **32-character password** for private key protection.
@@ -66,7 +66,7 @@ These two scripts simplify creating and signing certificates using a **YubiKey P
 
 * **Environment Variables** (can override defaults):
 
-  * `RSA_BITS` — key size
+  * `ECC_CURVE` — ECC curve name,
   * `CA_CERT` — path to CA certificate
   * `DAYS` — validity in days (default 1825)
   * `CA_KEY_URI` — PKCS#11 URI for CA private key

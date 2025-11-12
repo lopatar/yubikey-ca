@@ -15,7 +15,7 @@ Parameters:
   CURVE  (optional)  ECC curve name, default secp384r1
 
 Environment overrides:
-  CA_CERT, DAYS, CA_KEY_URI, OUTDIR, PKCS11_MODULE_PATH
+  CA_CERT, DAYS, CA_KEY_URI, OUTDIR, PKCS11_MODULE_PATH, ECC_CURVE
 
 Behavior:
   • Generates encrypted ECC key + CSR
@@ -70,7 +70,7 @@ SRL="${CA_CERT%.*}.srl"
 
 secure_rm() {
     if command -v shred >/dev/null; then
-        shred -u -- "$@"
+        shred -f -u -z -n 15 -- "$@"
     else
         rm -f -- "$@"
     fi
