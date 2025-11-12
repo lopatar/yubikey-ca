@@ -2,6 +2,7 @@
 # mk-piv-webcert-ecc.sh — generate & sign web server certificate using YubiKey PIV (slot 9c) with ECC
 # Usage: ./mk-piv-webcert-ecc.sh <CN> [IP] [CURVE]
 set -euo pipefail
+set +o history
 umask 077
 
 print_usage() {
@@ -111,13 +112,16 @@ subjectAltName = @alt
 $SAN_DNS$SAN_IP
 EOF
 
+#clear variables as soon as they are not used
+unset SAN_DNS
+unset SAN_IP
+
 # Generate random 32-char password
 export KEY_PASS
 KEY_PASS=$(openssl rand -hex 16)
 
 # Generate ECC key + CSR
-openssl ecparam -name "$ECC_CURVE" -genkey -out "$KEY" \
-    -passout "env:KEY_PASS"
+openssl ecparam -name "$ECC_CURVE" -genkey -noout | openssl ec -aes256 -out "$KEY" -passout env:KEY_PASS
 openssl req -new -key "$KEY" -out "$CSR" -config "$CSR_CNF" -passin "env:KEY_PASS"
 
 # Sign with YubiKey (pkcs11 engine) with appropriate digest based on curve
@@ -164,14 +168,14 @@ echo "> CN: $CN"
 [[ -n "$IP" ]] && echo "> IP (SAN): $IP"
 echo "> ECC curve: $ECC_CURVE"
 echo "> EKU: serverAuth"
-echo \"> P12 password (printed once): $PFX_PASS" > /dev/tty
+echo "> P12 password (printed once): $PFX_PASS" > /dev/tty
 
 echo ""
 unset PFX_PASS
 
 # Cleanup sensitive files
 secure_rm "$KEY"
-rm -f "$CSR" "$EXT" "$CSR_CNF"
+secure_rm "$CSR" "$EXT" "$CSR_CNF"
 
 # Zip folder contents
 ( cd "$OUTDIR" && rm -f "$BASE.zip" && zip -r "$BASE.zip" . -x "$BASE.zip" >/dev/null )
@@ -179,3 +183,5 @@ rm -f "$CSR" "$EXT" "$CSR_CNF"
 echo ""
 echo "Files saved in: $OUTDIR/"
 printf '  %s\n  %s\n  %s\n  %s\n' "$CRT" "$FULLCHAIN" "$PFX" "$ZIP"
+set -o history #enable history
+history -c #clear current shell history

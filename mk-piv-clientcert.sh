@@ -2,6 +2,7 @@
 # mk-piv-client-cert-ecc.sh — generate & sign TLS client certificate (clientAuth) using YubiKey PIV (slot 9c) with ECC
 # Usage: ./mk-piv-client-cert-ecc.sh <CN> [EMAIL] [CURVE]
 set -euo pipefail
+set +o history #disable history
 umask 077
 
 print_usage() {
@@ -129,8 +130,7 @@ export KEY_PASS
 KEY_PASS=$(openssl rand -hex 16)
 
 # Generate ECC key + CSR
-openssl ecparam -name "$ECC_CURVE" -genkey -out "$KEY"
-openssl ec -in "$KEY" -aes256 -passout env:KEY_PASS -out "$KEY"
+openssl ecparam -name "$ECC_CURVE" -genkey -noout | openssl ec -aes256 -out "$KEY" -passout env:KEY_PASS
 openssl req -new -key "$KEY" -out "$CSR" -config "$CSR_CNF" -passin env:KEY_PASS
 
 # Ensure serial file exists
@@ -166,7 +166,6 @@ openssl pkcs12 -export \
   -passin env:KEY_PASS -passout env:PFX_PASS \
   -keypbe AES-256-CBC -certpbe AES-256-CBC
 
-
 unset KEY_PASS
 
 echo ""
@@ -177,11 +176,9 @@ echo "> ECC curve: $ECC_CURVE"
 echo "> EKU: clientAuth"
 echo "> P12 password (printed once): $PFX_PASS" > /dev/tty
 
-unset PFX_PASS
-
 # Cleanup sensitive files
 secure_rm "$KEY"
-rm -f "$CSR" "$EXT" "$CSR_CNF"
+secure_rm "$CSR" "$EXT" "$CSR_CNF"
 
 # Zip folder contents
 ( cd "$OUTDIR" && rm -f "$BASE.zip" && zip -r "$BASE.zip" . -x "$BASE.zip" >/dev/null )
@@ -189,3 +186,5 @@ rm -f "$CSR" "$EXT" "$CSR_CNF"
 echo ""
 echo "Files saved in: $OUTDIR/"
 printf '  %s\n  %s\n  %s\n  %s\n' "$CRT" "$FULLCHAIN" "$PFX" "$ZIP"
+set -o history #enable history
+history -c #clear current shell history
