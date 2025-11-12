@@ -5,6 +5,11 @@ set -euo pipefail
 set +o history
 umask 077
 
+print()
+{
+  echo "$1" > /dev/tty
+}
+
 print_usage() {
   cat <<'EOF'
 Usage:
@@ -52,9 +57,9 @@ fi
 : "${PKCS11_MODULE_PATH:?Set PKCS11_MODULE_PATH to libykcs11.so}"
 
 # Check for prerequisites
-command -v openssl >/dev/null || { echo "openssl not found"; exit 3; }
-command -v zip >/dev/null     || { echo "zip not found"; exit 3; }
-[[ -f "$CA_CERT" ]] || { echo "CA cert '$CA_CERT' not found"; exit 4; }
+command -v openssl >/dev/null || { print "openssl not found"; exit 3; }
+command -v zip >/dev/null     || { print "zip not found"; exit 3; }
+[[ -f "$CA_CERT" ]] || { print "CA cert '$CA_CERT' not found"; exit 4; }
 
 # Paths
 mkdir -p "$OUTDIR"
@@ -121,7 +126,7 @@ export KEY_PASS
 KEY_PASS=$(openssl rand -hex 16)
 
 # Generate ECC key + CSR
-openssl ecparam -name "$ECC_CURVE" -genkey -noout | openssl ec -aes256 -out "$KEY" -passout env:KEY_PASS
+openssl ecparam -name "$ECC_CURVE" -genkey -noout | openssl ec -aes256 -out "$KEY" -passout "env:KEY_PASS"
 openssl req -new -key "$KEY" -out "$CSR" -config "$CSR_CNF" -passin "env:KEY_PASS"
 
 # Sign with YubiKey (pkcs11 engine) with appropriate digest based on curve
@@ -155,22 +160,22 @@ openssl pkcs12 -export \
 
 # Optionally print private key
 if [[ "$PRINT_KEY" == 1 || "$PRINT_KEY" == "true" ]]; then
-  echo ""
+  print ""
   openssl ec -in "$KEY" -passin "env:KEY_PASS" > /dev/tty
-  echo ""
+  print ""
 fi
 
 unset KEY_PASS
 
-echo ""
-echo "> WWW server cert generated successfully"
-echo "> CN: $CN"
-[[ -n "$IP" ]] && echo "> IP (SAN): $IP"
-echo "> ECC curve: $ECC_CURVE"
-echo "> EKU: serverAuth"
-echo "> P12 password (printed once): $PFX_PASS" > /dev/tty
+print ""
+print "> WWW server cert generated successfully"
+print "> CN: $CN"
+[[ -n "$IP" ]] && print "> IP (SAN): $IP"
+print "> ECC curve: $ECC_CURVE"
+print "> EKU: serverAuth"
+print "> P12 password (printed once): $PFX_PASS" > /dev/tty
 
-echo ""
+print ""
 unset PFX_PASS
 
 # Cleanup sensitive files
@@ -180,8 +185,8 @@ secure_rm "$CSR" "$EXT" "$CSR_CNF"
 # Zip folder contents
 ( cd "$OUTDIR" && rm -f "$BASE.zip" && zip -r "$BASE.zip" . -x "$BASE.zip" >/dev/null )
 
-echo ""
-echo "Files saved in: $OUTDIR/"
-printf '  %s\n  %s\n  %s\n  %s\n' "$CRT" "$FULLCHAIN" "$PFX" "$ZIP"
+print ""
+print "Files saved in: $OUTDIR/"
+printf '  %s\n  %s\n  %s\n  %s\n' "$CRT" "$FULLCHAIN" "$PFX" "$ZIP" > /dev/tty
 set -o history #enable history
 history -c #clear current shell history
