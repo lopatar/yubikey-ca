@@ -1,6 +1,6 @@
 # YubiKey CA
 
-These two scripts simplify creating and signing certificates using a **YubiKey PIV** (slot 9c) as a signing device. One script is for **web server certificates**; the other is for **client TLS certificates**. Currently, supports RSA only.
+These two scripts simplify creating and signing certificates using a **YubiKey PIV** (slot 9c) as a signing device. One script is for **web server certificates**; the other is for **client TLS certificates**. Currently supports P-256 and P-384.
 
 ---
 
@@ -12,17 +12,17 @@ These two scripts simplify creating and signing certificates using a **YubiKey P
 * **Usage**:
 
 ```bash
-./mk-piv-webcert.sh <CN> [IP] [BITS]
+./mk-piv-webcert.sh <CN> [IP] [CURVE]
 ```
 
 * **Parameters**:
 
   * `CN` (required) — Common Name and output folder name.
   * `IP` (optional) — IP address for Subject Alternative Name (SAN).
-  * `BITS` (optional) — RSA key size (default 2048).
+  * `CURVE` (optional) — ECC curve name, defaults to secpr384r1
 * **Behavior**:
 
-  * Generates an RSA key + CSR locally.
+  * Generates an ECC key + CSR locally.
   * Signs CSR with YubiKey PIV CA key (slot 9c via PKCS#11).
   * Generates output files in `<CN>/`:
 
@@ -43,17 +43,17 @@ These two scripts simplify creating and signing certificates using a **YubiKey P
 * **Usage**:
 
 ```bash
-./mk-piv-client-cert.sh <CN> [EMAIL] [BITS]
+./mk-piv-client-cert.sh <CN> [EMAIL] [CURVE]
 ```
 
 * **Parameters**:
 
   * `CN` (required) — Common Name and output folder name.
   * `EMAIL` (optional) — Email for SAN (`rfc822Name`) and DN (`emailAddress`).
-  * `BITS` (optional) — RSA key size (default 2048).
+  * `CURVE` (optional) — ECC curve name, defaults to secpr384r1
 * **Behavior**:
 
-  * Generates an RSA key + CSR locally.
+  * Generates an ECC key + CSR locally.
   * Signs CSR with YubiKey PIV CA key.
   * Generates output files in `<CN>/` (same as web script).
   * Uses a **32-character password** for private key protection.
@@ -66,7 +66,7 @@ These two scripts simplify creating and signing certificates using a **YubiKey P
 
 * **Environment Variables** (can override defaults):
 
-  * `RSA_BITS` — key size
+  * `ECC_CURVE` — ECC curve name,
   * `CA_CERT` — path to CA certificate
   * `DAYS` — validity in days (default 1825)
   * `CA_KEY_URI` — PKCS#11 URI for CA private key
@@ -115,12 +115,12 @@ export PKCS11_MODULE_PATH=/usr/lib/x86_64-linux-gnu/libykcs11.so
 ## Output Files
 
 | File               | Description                                      |
-| ------------------ | ------------------------------------------------ |
+| ------------------ |--------------------------------------------------|
 | `CN.crt`           | Signed certificate                               |
 | `CN.fullchain.pem` | Certificate + CA chain                           |
 | `CN.p12`           | PKCS#12 bundle (protected by random password)    |
 | `CN.zip`           | Zip of folder contents                           |
-| `CN.key`           | Encrypted RSA private key (deleted after script) |
+| `CN.key`           | Encrypted ECC private key (deleted after script) |
 
 ---
 
