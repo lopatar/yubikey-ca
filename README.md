@@ -1,6 +1,6 @@
 # YubiKey CA
 
-These two scripts simplify creating and signing certificates using a **YubiKey PIV** (slot 9c) as a signing device. One script is for **web server certificates**; the other is for **client TLS certificates**. Currently supports P-256 and P-384.
+These two scripts simplify creating and signing certificates using a **YubiKey PIV** (slot 9c) as a signing device. One script is for **web server certificates**; the other is for **client TLS certificates**. Currently supports P-256 and P-384 (**default**).
 
 ---
 
@@ -98,7 +98,7 @@ These two scripts simplify creating and signing certificates using a **YubiKey P
 
 ```bash
 export PKCS11_MODULE_PATH=/usr/lib/x86_64-linux-gnu/libykcs11.so
-./mk-piv-webcert.sh ap.example.local 10.0.0.5 4096
+./mk-piv-webcert.sh ap.example.local 10.0.0.2 secp256r1
 # Outputs in ./ap.example.local/
 ```
 
@@ -106,8 +106,8 @@ export PKCS11_MODULE_PATH=/usr/lib/x86_64-linux-gnu/libykcs11.so
 
 ```bash
 export PKCS11_MODULE_PATH=/usr/lib/x86_64-linux-gnu/libykcs11.so
-./mk-piv-client-cert.sh alice alice@example.com 4096
-# P12 password printed once; outputs in ./alice/
+./mk-piv-client-cert.sh alice alice@example.com secp256r1
+# Outputs in ./alice/
 ```
 
 ---

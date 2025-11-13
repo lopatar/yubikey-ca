@@ -35,7 +35,7 @@ Behavior:
 
 Examples:
   ./mk-piv-client-cert.sh alice
-  ./mk-piv-client-cert.sh alice alice@example.com 4096
+  ./mk-piv-client-cert.sh alice alice@example.com secp256r1
 EOF
 }
 

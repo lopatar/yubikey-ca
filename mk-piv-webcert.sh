@@ -34,8 +34,8 @@ Behavior:
   • Displays certificate info at the end
 
 Examples:
-  ./mk-piv-webcert.sh ap.wifi.lopatar.local
-  ./mk-piv-webcert.sh ap.wifi.lopatar.local 10.69.69.2 secp384r1
+  ./mk-piv-webcert.sh ap.example.local
+  ./mk-piv-webcert.sh ap.example.local 10.0.0.2 secp256r1
 EOF
 }
 
