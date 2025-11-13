@@ -134,13 +134,15 @@ subjectAltName = @alt
 $(printf '%s' "$SAN_EMAIL$SAN_DNS_FALLBACK")
 EOF
 
+unset SAN_DNS_FALLBACK SAN_EMAIL
+
 # Generate random 32-char password
 export KEY_PASS
 KEY_PASS=$(openssl rand -hex 16)
 
 # Generate ECC key + CSR
-openssl ecparam -name "$ECC_CURVE" -genkey -noout | openssl ec -aes256 -out "$KEY" -passout env:KEY_PASS
-openssl req -new -key "$KEY" -out "$CSR" -config "$CSR_CNF" -passin env:KEY_PASS
+openssl ecparam -name "$ECC_CURVE" -genkey -noout | openssl ec -aes256 -out "$KEY" -passout "env:KEY_PASS"
+openssl req -new -key "$KEY" -out "$CSR" -config "$CSR_CNF" -passin "env:KEY_PASS"
 
 # Ensure serial file exists
 [[ ! -f "$SRL" ]] && echo '01' > "$SRL"
@@ -163,6 +165,8 @@ openssl x509 -req \
   -extfile "$EXT" -extensions v3_cert \
   -out "$CRT"
 
+unset DIGEST
+
 # Create fullchain file
 cat "$CRT" "$CA_CERT" > "$FULLCHAIN"
 
@@ -172,7 +176,7 @@ PFX_PASS="$(openssl rand -hex 8)"
 openssl pkcs12 -export \
   -inkey "$KEY" -in "$CRT" -certfile "$CA_CERT" \
   -name "$CN" -out "$PFX" \
-  -passin env:KEY_PASS -passout env:PFX_PASS \
+  -passin "env:KEY_PASS" -passout "env:PFX_PASS" \
   -keypbe AES-256-CBC -certpbe AES-256-CBC
 
 unset KEY_PASS
@@ -184,6 +188,8 @@ print "> CN: $CN"
 print "> ECC curve: $ECC_CURVE"
 print "> EKU: clientAuth"
 print "> P12 password (printed once): $PFX_PASS" > /dev/tty
+
+unset PFX_PASS
 
 # Cleanup sensitive files
 secure_rm "$KEY"

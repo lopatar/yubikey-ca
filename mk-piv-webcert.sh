@@ -152,6 +152,8 @@ openssl x509 -req \
   -extfile "$EXT" -extensions v3_cert \
   -out "$CRT"
 
+unset DIGEST
+
 # Create fullchain file
 cat "$CRT" "$CA_CERT" > "$FULLCHAIN"
 
